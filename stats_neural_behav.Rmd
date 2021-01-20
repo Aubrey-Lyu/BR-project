@@ -1,0 +1,380 @@
+---
+title: "Statistical Testing"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+require(knitr)
+library(tidyverse)
+library(lme4)
+library(plyr)
+
+opts_chunk$set(echo = TRUE, warning=FALSE, fig.width=8, fig.height=4)
+```
+
+```{r read data, warning=FALSE, echo = FALSE}
+df <- read_csv('/media/dian/D/data/Binocular_Rivalry/HMM_analyses/output_test/embedded_lag/DMN_V1_1000_100_K4_pca16/run1_analyses/table_chronnectom_result.csv') #<--- # data for every trials, non-averaged
+  
+```
+
+
+```{r data sorting for within-subj design, echo = FALSE}
+
+## ==============   To get individual-averaged data ===================
+conditions <- c('BR_dominant',  'BR_mixed',
+    'Rpl_smt_dominant',  'Rpl_smt_mixed',
+    'Rpl_ins_dominant',  'Rpl_ins_mixed')
+# variable initiation
+withinsub_mat <- matrix(data = NA, nrow=20*length(conditions), ncol=ncol(df)-2)
+SubList <- c()
+ConList <- c()
+n<-0
+
+for(ss in 1:20){
+  for(cond in conditions){
+# begin the loop
+n<-n+1
+
+sub <- paste0('S', str_pad(ss, 2 ,pad='0'))
+SubList[n] <- sub
+ConList[n] <- cond
+
+sdf<-df %>% filter(Condition==cond & cond.sub==sub) %>% select(-Condition, -cond.sub)
+sdf.mean <- sapply(sdf, function(sdf) mean(na.omit(sdf)))
+withinsub_mat[n,] <- sdf.mean
+# end of the loop
+}
+}
+# assembly
+colnames(withinsub_mat) <- names(sdf)
+withinsub_df <- as.data.frame(withinsub_mat)
+withinsub_df$Condition <- ConList
+withinsub_df$Subject  <- SubList
+withinsub_df$percept_latency = rowMeans(cbind(withinsub_df$Y.Lat_before, withinsub_df$Y.Lat_after))
+
+
+##### get clean data  ###################################
+sdf_vars <- c('subjects','conditions','percept_latency','Y.Lat_after', 'Y.Lat_before', 'FO','countOFontimes','mean_state_activity', 'mean_state_interval','mean_state_lifetime','life_time','states')
+sdf_clean <- as.data.frame(matrix(ncol=length(sdf_vars), nrow=0))
+names(sdf_clean) <- sdf_vars
+  
+for (cond in 1:4){
+  
+  df_per_cond <- as.data.frame(matrix(ncol=length(sdf_vars), nrow=0))
+  names(df_per_cond) <- sdf_vars
+  
+  for (k in 1:4){
+    thisstate <- paste0('K', as.character(k))
+    condition <- conditions[cond]
+    
+df_per_state_per_cond <- withinsub_df %>% 
+  select(Subject, Condition, percept_latency, Y.Lat_after, Y.Lat_before, contains(thisstate))%>% 
+  filter(!is.nan(percept_latency)) %>% filter(Condition == condition) %>% mutate(states = thisstate)
+
+names(df_per_state_per_cond) <- sdf_vars
+
+df_per_cond <- rbind(df_per_cond, df_per_state_per_cond)
+
+}
+  
+  # define extreme value based on the 3 standard deviations of the experimental condition (1 per 4)
+  #key_index <- match('Y.Lat_after', sdf_vars)
+  key_column = df_per_cond$Y.Lat_before
+low_cutoff  = mean(key_column) - 3*sd(key_column)
+high_cutoff = mean(key_column) + 3*sd(key_column)
+df_per_cond <- df_per_cond[key_column >low_cutoff & key_column<high_cutoff,]
+
+sdf_clean <- rbind(sdf_clean, df_per_cond)
+}
+
+sdf_clean$conditions[sdf_clean$conditions == 'BR_dominant'] = 'BR (dominant)'
+sdf_clean$conditions[sdf_clean$conditions == 'BR_mixed'] = 'BR (mixed)'
+sdf_clean$conditions[sdf_clean$conditions == 'Rpl_smt_dominant'] = 'RPL (dominant)'
+sdf_clean$conditions[sdf_clean$conditions == 'Rpl_smt_mixed'] = 'RPL (mixed)'
+sdf_clean$state_lifetime_second = round(sdf_clean$mean_state_lifetime/250,3)
+##################### get subset with only BR conditions from data  ##########
+sdf_BR2 <- sdf_clean %>% filter(grepl('BR',conditions ) )
+
+
+```
+
+```{r data sorting gather FO-K, echo = FALSE}
+sdf3<- withinsub_df %>% select(Condition, Subject, 1:4) %>% gather(key ='K', value='FO', 3:6 ) %>% 
+  filter(Condition %in% c("BR_dominant","BR_mixed", "Rpl_smt_dominant", "Rpl_smt_mixed"))
+```
+
+### Statistical testing for state Fractional Occupancy (FO).
+
+1. Interaction effect between states and conditions, suggesting that the FO of the 4 states are different among conditions. 
+
+```{r}
+# Two-way anova
+mod_anova <- lm(FO ~ Condition + K, sdf3)
+# Interaction model
+mod_intr <- lm(FO ~ Condition * K, sdf3)
+
+res <- residuals(mod_intr)- residuals(mod_anova)
+
+anova(mod_anova, mod_intr, 
+      test='Chisq')
+print(paste('AIC is reduced by', as.character(AIC(mod_anova) - AIC(mod_intr))))
+
+```
+
+
+
+```{r}
+# Interaction model
+mod_intr <- glm(FO ~ Condition * K, sdf3, family=Gamma(link='identity'))
+#anova(mod_intr)
+res_intr <- residuals(mod_intr)
+hist(res_intr, prob=TRUE, col='grey70',
+     main='Histogram for residuals of the model fitting',
+     xlab='residuals of the mod_intr: FO ~ Condition * K')
+lines(density(res_intr, adjust=2), col='red', lty='dotted', lwd=3)
+```
+
+
+2. Permutation tests for pair-wise comparison of state FO within conditions 
+```{r permutation test FO against states over median}
+ordered_conditions <- c('BR_dominant', 'BR_mixed', 'Rpl_smt_dominant','Rpl_smt_mixed')
+
+within_conditions <- c('BR_dominant', 'BR_mixed', 'BR_mixed','Rpl_smt_dominant', 'Rpl_smt_dominant','Rpl_smt_mixed')
+contrasted_pairs <- matrix(c('FO.K1','FO.K4',
+                             'FO.K2','FO.K3',
+                             'FO.K1','FO.K3',
+                             'FO.K1','FO.K2',
+                             'FO.K2','FO.K3',
+                             'FO.K1','FO.K4'), nrow=2)
+
+P <- c()
+
+for(c in 1:length(within_conditions)){
+
+  # extract compared conditions
+  contrasted_pair = contrasted_pairs[,c]
+  within_condition = within_conditions[c]
+  
+celldat <- sdf3 %>% filter(Condition == within_condition & 
+                             K %in% contrasted_pair) %>% select(Condition, Subject, K, FO)
+
+# decide order
+diff_median <- diff(c(median(celldat$FO[celldat$K==contrasted_pair[1]]), median(celldat$FO[celldat$K==contrasted_pair[2]])))
+Kstr <- str_remove(contrasted_pair,'FO.K')
+Knum <- as.numeric(Kstr)
+bigK <- ifelse(diff_median>0, Kstr[2], Kstr[1])
+
+true_class <- ifelse(grepl(bigK, celldat$K),1,0)
+n <- 20
+div <- length(true_class)/(2*n)
+
+fo <- celldat$FO
+true_diff <- diff(by(fo, true_class, median))/div # becuase the contrast is even, so taking difference and then mean is the same as taking the differnce of the mean
+dist_diff = c()
+set.seed(1)
+permutation_N <- 2000
+
+for (i in 1:permutation_N){
+# notice that the permutation is paired, so only exchange within the subjects
+rand_binomial <- rbinom(n, 1, 0.5)
+rand_binomial_paired <- abs(1-rand_binomial)
+
+rand_sample <- matrix(data=NA, nrow=1, ncol=div*n) 
+rand_sample[true_class==1]=rep(rand_binomial, each=div) #rand_binomial
+rand_sample[true_class==0]=rep(rand_binomial_paired, each=div) #rand_binomial_paired
+rand_sample <- as.numeric(rand_sample)
+
+dist_diff[i] <- diff(by(fo, rand_sample, median))/div
+}
+
+#r plot permutation result
+hist(dist_diff, xlim = c(-0.5, 0.5), col = "black", breaks = 100, main='Histogram of observations when assigning groups randomly within subjects', xlab="differece in median")
+abline(v = true_diff, col = "blue", lwd = 2)
+true_diff
+if (sum(dist_diff > true_diff)/permutation_N < 0.5){p = sum(dist_diff > true_diff)/permutation_N}else{
+  p = sum(dist_diff < true_diff)/permutation_N}
+p
+
+# write variables;dodge is for plotting
+#P[c] <- paste0('p=', format(round(p, 3), nsmall = 3))
+P[c] <-  format(round(p, 2), nsmall = 2)
+
+
+}
+
+P_adjust<-format(round(p.adjust(P, method='fdr'), 2), nsmall = 2)
+P_adjust
+```
+
+### Statistical exploration for the relationship of the State-4 lifetime and the perceptual duration during BR 
+
+1. Mixed linear model for trial-by-trial prediction. For m0 and m1, the condition type or the State-4 lifetime was used to fit the first-level (within-subject) model, and its slope is allowed to vary across subjects but is assumed to centre around a fixed value. For m2, the random ractor is the interval, while the condition type and State-4 lifetime are fixed factors. 
+
+```{r stats}
+df_br <- df %>% filter(grepl('BR', Condition)) %>% mutate(life.K4.second = life.K4/250)
+
+m0 <- lmer(Y.Lat_before ~ Condition + (Condition|cond.sub), df_br)
+m1 <- lmer(Y.Lat_before ~ Condition + life.K4.second + (life.K4.second|cond.sub), df_br)
+m2 <- lmer(Y.Lat_before ~ Condition + life.K4.second + (1|cond.sub), df_br)
+
+summary(m0)
+summary(m1)
+summary(m2)
+
+anova(m0, m1, m2)
+```
+
+2. ANCOVA model for individual-averaged values (i.e., variance provided by individual differences), hence the prediction is made on the group level. 
+
+```{r gerenalised linear model for group-level analysis}
+
+sdf_BR_K4 <- sdf_clean %>% filter(grepl('BR', conditions) & states=='K4')
+
+mod0 <- glm(Y.Lat_before ~ conditions, sdf_BR_K4, family=Gamma(link='identity'))
+mod1 <- glm(Y.Lat_before ~ state_lifetime_second*conditions, sdf_BR_K4, family=Gamma(link='identity'))
+mod2 <- glm(Y.Lat_before ~ state_lifetime_second+conditions, sdf_BR_K4, family=Gamma(link='identity'))
+
+AIC(mod0, mod1, mod2)
+summary(mod2)
+```
+
+
+```{r}
+residual_ancova<-residuals(mod2)
+hist(residual_ancova, prob=TRUE, col='grey70',
+     main='Histogram for residuals of the model fitting',
+     xlab='residuals of the mod2: Lat_before ~ state_lifetime_second + conditions')
+lines(density(residual_ancova, adjust=2), col='red', lty='dotted', lwd=3)
+
+```
+
+
+```{r read data for granger causality}
+tbl2<-read_csv('/media/dian/D/data/Binocular_Rivalry/HMM_analyses/output_test/embedded_lag/DMN_V1_1000_100_K4_pca16/GC_bhv_table2.csv')
+tblF <- read_csv('/media/dian/D/data/Binocular_Rivalry/HMM_analyses/output_test/embedded_lag/DMN_V1_1000_100_K4_pca16/run1_analyses/Ftable.csv')
+
+dat <- cbind(tbl2, tblF)
+dat = dat[(!is.nan(dat$stable_before)) & (dat$dBIC_pcu< -5),]
+
+dat$dBIC_pcu_log <- log(-1*(dat$dBIC_pcu))
+
+dat2<- dat %>% mutate(LFT_cat = 
+                        case_when(
+                          k4_life>250*0.95 ~ "0.95s < State 4",
+                          k4_life<=250*0.95 &  k4_life > 250*0.7 ~ "0.7s < State 4 <= 0.95s",
+                          k4_life<=250*0.7 &  k4_life > 250*0.6 ~ "0.6s < State 4 <= 0.7s",
+                          k4_life<=250*0.6 &  k4_life > 250*0.5 ~ "0.5s < State 4 <= 0.6s",
+                          k4_life <= 250*0.5 ~ "State 4 <= 0.5s"
+                        )
+                        ) %>% mutate(rate=lat_before+stable_before)
+
+
+withinsub_mat <- matrix(data = NA, nrow=20*length(unique(dat2$LFT_cat)), ncol=ncol(dat2)-2)
+SubList <- c()
+LFT_cat <- c()
+
+n<-0
+for (ss in 1:20){
+  for (c_lft in unique(dat2$LFT_cat)){
+  n <- n+1
+  subj <- paste0('S', str_pad(ss, 2 ,pad='0'))
+  LFT_cat[n] <- c_lft
+  stbl<-dat2 %>% filter(sub==subj & LFT_cat==c_lft) %>% select(-LFT_cat, -sub)
+stbl.mean <- sapply(stbl, function(stbl) mean(na.omit(stbl)))
+withinsub_mat[n,] <- stbl.mean
+SubList[n] <- subj
+}
+}
+
+# assembly
+colnames(withinsub_mat) <- names(stbl)
+GC_withinsub_df <- as.data.frame(withinsub_mat) %>% mutate(k4_second = k4_life/250)
+GC_withinsub_df$Subject  <- SubList
+GC_withinsub_df$life_time_category <- LFT_cat
+ 
+GC_withinsub_df2 <- GC_withinsub_df %>% mutate(k4_lifetime_order = case_when(
+                          LFT_cat== "0.95s < State 4" ~5,
+                          LFT_cat== "0.7s < State 4 <= 0.95s"~4,
+                          LFT_cat== "0.6s < State 4 <= 0.7s"~3,
+                          LFT_cat== "0.5s < State 4 <= 0.6s"~2,
+                          LFT_cat== "State 4 <= 0.5s"~ 1
+                        )) %>% filter(LFT_cat != "State 4 <= 0.5s")  %>% na.omit()
+
+```
+
+### Statistical testing for the relationship between the Granger causality (GC) from PCU to V1 and the perceptual duration of the last dominant percept for BR (dominant) trials 
+
+
+1. Mixed linear model with the first-level model fitting for each subject and the interval is the random effect. The specified models are meant to address the question: whether the GC(PCU->V1) indicates an elevated level of endogenous attention or global adaptation. In the former case, GC is hypothesised to speed up the perceptual transition, therefore it should be negatively correlated with the mixed perceptual duration before settling on a new dominant percept (var: lat_before). This situation is modelled as the mdl1. In the latter case when GC (PCU->V1) indicates global adaptation of a dominant percept, the GC should be predicted by the length of the last dominant percept before a perceptual transition (var: stable_before). This case is modelled by the mdl2. Since we already knew that there was a relationship between the State-4 lifetime and the duration before a perceptual change (lat_before), so we also modelled in the same way for the State-4 lifetime as a reference/comparison to the GC. Unfortunately, the result is not significant for either of the hypotheses. GC (PCU->V1) does not have the predictive power for the trial-by-trial prediction of perceptual durations. 
+
+
+
+```{r mixed linear model}
+mdl1 <- lmer(lat_before ~ dBIC_pcu_log + (1|sub), dat2)
+mdl2 <- lmer(dBIC_pcu_log ~ stable_before + (1|sub), dat2)
+mdl3 <- lmer(lat_before ~ k4_life + (1|sub), dat2)
+mdl4 <- lmer(k4_life ~ stable_before + (1|sub), dat2)
+
+summary(mdl1)
+summary(mdl2)
+summary(mdl3)
+summary(mdl4)
+AIC(mdl1, mdl2, mdl3, mdl4)
+```
+
+2. Maybe the GC effect is bound to the State 4; therefore, here we are testing the relationship between the GC and perceptual duration only in trials with the majority (>95%) of the timepoint being visited by the State-4 neural dynamics. The model fitting is clearly improved, however, the null hypotheses are still better. 
+
+```{r trial-by-trail prediction for stable K4 trials}
+dat2_g4 <- filter(dat2, LFT_cat == '0.95s < State 4') %>% na.omit()
+mdl0.1 <- lmer(lat_before ~ 1 + (1|sub), dat2_g4)
+mdl0.2 <- lmer(dBIC_pcu_log ~ 1 + (1|sub), dat2_g4)
+mdl1.0 <- lmer(lat_before ~ dBIC_pcu_log + (1|sub), dat2_g4)
+mdl1.1 <- lmer(lat_before ~ dBIC_pcu_log + (dBIC_pcu_log|sub), dat2_g4)
+mdl2 <- lmer(dBIC_pcu_log ~ stable_before + (1|sub), dat2_g4)
+
+
+AIC(mdl1.0, mdl1.1, mdl2, mdl0.1, mdl0.2)
+
+summary(mdl1.0)
+summary(mdl1.1)
+
+
+```
+
+3. Again, we sorted to group-level correlation between the GC, State-4 lifetime and the perceptual duration. When in comes to the individual-averaged values, there is no point to separate the last stable percept and the current mixed percept, because when taking an individual average, these two values are highly correlated. Therefore, here we only modeled for the averaged duration of the "last" dominant percept within-subject, which is almost equal to the average of all his/her dominant percepts. It can also be seen as an index of the speed/rate of BR transitions of a subject. 
+
+
+```{r group-level interaction of dBIC_pcu and lifetime - sig} 
+mod_GC_regr <- glm(stable_before ~ dBIC_pcu_log + k4_lifetime_order, GC_withinsub_df2, family=Gamma(link="identity"))
+mod_GC_intr <- glm(stable_before ~ dBIC_pcu_log * k4_lifetime_order, GC_withinsub_df2, family=Gamma(link="identity"))
+AIC(mod_GC_regr, mod_GC_intr)
+summary(mod_GC_intr)
+
+res_GC_intr <- residuals(mod_GC_intr)
+hist(res_GC_intr, prob=TRUE, col='grey70',
+     main='Histogram for residuals of the model fitting',
+     xlab='residuals of the mod_GC_intr: stable_before ~ dBIC_pcu_log * k4_second')
+lines(density(residual_ancova, adjust=1.5), col='red', lty='dotted', lwd=3)
+
+```
+
+
+
+```{r simple regression stable percept duration vs Pcu_dBIC-sig}
+GC_withinsub_df2_g4 <- GC_withinsub_df2 %>%  filter(life_time_category == "0.95s < State 4")
+#withinsub_df2_g4= withinsub_df2_g4[!is.na(withinsub_df2_g4$stable_before)&
+                                #     !is.na(withinsub_df2_g4$pcu_v1_BIC_log),]
+#
+#mod_BIC0 <- glm(stable_before ~ 1, withinsub_df2_g4)
+mod_GC_stable <- glm(stable_before ~ dBIC_pcu_log, GC_withinsub_df2_g4, family=Gamma(link='identity'))
+res_GC_stable <- residuals(mod_GC_stable)
+
+summary(mod_GC_stable)
+  
+hist(res_GC_stable, prob=TRUE, col='grey70',
+     main='Histogram for residuals of the model fitting',
+     xlab='residuals of the mod_GC_intr: stable_before ~ dBIC_pcu_log')
+lines(density(res_GC_stable, adjust=1.5), col='red', lty='dotted', lwd=3)
+```
+

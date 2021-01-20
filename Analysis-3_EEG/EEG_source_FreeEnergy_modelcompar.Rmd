@@ -1,0 +1,136 @@
+---
+title: "Comparing inverse model with Free energy"
+output: html_notebook
+---
+```{r setup, include=FALSE}
+library('plyr')
+library('tidyverse')
+library('ggplot2')
+library('ggsci')
+library(R.matlab)
+library(RColorBrewer)
+library(lme4)
+library('lmerTest')
+library(ggpubr)
+library("predictmeans")
+library(psych)
+library(rcompanion)
+library('multcompView')
+library('lsmeans')
+
+```
+
+```{r global_options, include = FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, WARNING=FALSE)
+#options(tinytex.verbose = TRUE)
+knitr::opts_knit$set(root.dir = "/media/dian/D/R/project/BR")
+```
+
+```{r read header info}
+header <- read_csv('/media/dian/D/R/project/BR/data/info/inversion_models.csv')
+kable(header)
+```
+
+
+```{r read data}
+F_dat<- read_csv('data/info/F_inv_edominu_allc.csv')
+Inv_c <- c()
+for (i in 1:nrow(F_dat)){
+  Inv_c[i] <- sprintf("%02d", F_dat$Inv[i])
+}
+
+F_dat$Inv = as.factor(Inv_c)
+
+```
+
+```{r summary table}
+#Calculation of mean and sd of each group ?
+F_mean = aggregate(F_dat$F, by=list(F_dat$Inv) , mean) ; colnames(F_mean)=c("Inv" , "mean")
+F_sd   = aggregate(F_dat$F, by=list(F_dat$Inv) , sd) ; colnames(F_sd)=c("Inv" , "sd")
+F_info = merge(F_mean , F_sd , by.x=1 , by.y=1)
+
+kable(F_info)
+```
+
+
+```{r boxplot}
+
+p<- ggplot(F_dat)+
+  geom_point(aes(x = Inv, y = F) , colour=rgb(0.8,0.7,0.1,0.1) , size=2) + 
+        geom_point(data = F_info, aes(x=Inv, y = mean) , colour = rgb(0.6,0.5,0.4,0.6) , size = 5) +
+        geom_errorbar(data = F_info, aes(x = Inv, y = sd, ymin = mean - sd, ymax = mean + sd), 
+                      colour = rgb(0.4,0.8,0.2,0.4) , width = 0.3 , size=1.8)+
+  geom_hline(yintercept = mean(F_dat$F), color="orange", linetype="dashed", alpha = 0.7)+
+  theme_classic()+
+  scale_x_discrete(name = "Inversion model")+
+  scale_y_continuous(name = 'Free energy of the inversion model')+
+  theme(
+        axis.title = element_text(size=13),
+        axis.text.x = element_text(size=10),
+        axis.text.y = element_text(size=12)
+        )
+p
+```
+
+
+```{r filter data}
+fullband <- F_dat %>% filter(Inv == '02' | Inv == '05')
+delta    <- F_dat %>% filter(Inv == '07' | Inv == '08')
+theta    <- F_dat %>% filter(Inv == '09' | Inv == '10')
+alpha1   <- F_dat %>% filter(Inv == '11' | Inv == '12')
+alpha2   <- F_dat %>% filter(Inv == '13' | Inv == '14')
+beta1    <- F_dat %>% filter(Inv == '15' | Inv == '16')
+beta2    <- F_dat %>% filter(Inv == '17' | Inv == '18')
+
+```
+
+
+```{r statistical testing, echo = TRUE}
+lm1 <- lm(F ~ Inv + Percept + Sub + Cond, data = fullband)
+ANOVA1 <- summary(aov(lm1))
+ANOVA1
+
+lm2 <- lm(F ~ Inv + Percept + Sub + Cond, data = delta)
+ANOVA2 <- summary(aov(lm2))
+ANOVA2
+
+lm3 <- lm(F ~ Inv + Percept + Sub + Cond, data = theta)
+ANOVA3 <- summary(aov(lm3))
+ANOVA3
+
+lm4 <- lm(F ~ Inv + Percept + Sub + Cond, data = alpha1)
+ANOVA4 <- summary(aov(lm4))
+ANOVA4
+
+lm5 <- lm(F ~ Inv + Percept + Sub + Cond, data = alpha2)
+ANOVA5 <- summary(aov(lm5))
+ANOVA5
+
+lm6 <- lm(F ~ Inv + Percept + Sub + Cond, data = beta1)
+ANOVA6 <- summary(aov(lm6))
+ANOVA6
+
+lm7 <- lm(F ~ Inv + Percept + Sub + Cond, data = beta2)
+ANOVA7 <- summary(aov(lm7))
+ANOVA7
+```
+
+```{r, echo = TRUE}
+lm4.2 <- lm(F ~ Inv , data = alpha1)
+ANOVA4.2 <- summary(aov(lm4.2))
+ANOVA4.2
+
+lm5.2 <- lm(F ~ Inv , data = alpha2)
+ANOVA5.2 <- summary(aov(lm5.2))
+ANOVA5.2
+
+lm6.2 <- lm(F ~ Inv , data = beta1)
+ANOVA6.2 <- summary(aov(lm6.2))
+ANOVA6.2
+
+lm7.2 <- lm(F ~ Inv, data = beta2)
+ANOVA7.2 <- summary(aov(lm7.2))
+ANOVA7.2
+```
+

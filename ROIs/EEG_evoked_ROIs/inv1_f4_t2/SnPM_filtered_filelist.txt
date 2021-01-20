@@ -1,0 +1,4 @@
+./model_GMS3_v3_NP/BR-Rpl_mixed_9/SnPM_filtered_pos.nii
+./model_GMS3_v3_NP/BR-RPl_rdgn-mixed_13/SnPM_filtered_pos.nii
+./model_GMS3_v3_NP/T-BR-Rpl_rdgn_23/SnPM_filtered_pos.nii
+./model_GMS3_v3_NP/T-BR-Rpl_rdgn_23/SnPM_filtered_neg.nii

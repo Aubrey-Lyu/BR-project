@@ -1,0 +1,654 @@
+---
+title: "BR Behavioral Quality Check"
+author: "Dian Lu"
+date: "29 May 2019"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+library('plyr')
+library('tidyverse')
+library('ggplot2')
+library('ggsci')
+library(R.matlab)
+library(RColorBrewer)
+library(lme4)
+library('lmerTest')
+library(ggpubr)
+library("predictmeans")
+library(psych)
+library(rcompanion)
+library('multcompView')
+library('lsmeans')
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, WARNING=FALSE)
+#options(tinytex.verbose = TRUE)
+knitr::opts_knit$set(root.dir = "/media/dian/D/R/project/BR")
+```
+
+
+##### *Basic Behaviour Summary* (response and head movement)
+
+```{r tables}
+bhv <- read_csv('data/info/table_scan.txt')
+```
+
+### 1. Analysis of 3 kinds of percept
+
+#### (1) For total conditions:
+```{r histogram_data_1, echo=FALSE}
+freq1<-data.frame('Percept' = 'Green', 'Freq' = bhv$FREQ1) 
+freq2<-data.frame('Percept' = 'Red', 'Freq' = bhv$FREQ2) 
+freq3<-data.frame('Percept' = 'Mixed', 'Freq' = bhv$FREQ3)
+freqdata <- rbind(freq1, freq2, freq3)
+
+mu <- ddply(freqdata, "Percept", summarise, grp.mean=mean(Freq))
+
+p1 <- ggplot(freqdata, aes(x = Freq, color = Percept, fill = Percept)) + 
+  geom_histogram(aes(y=..density..), fill = 'white', alpha=0.3, position = "identity", bins = 40,size =0.5)+
+  geom_density(alpha=0.4)+
+  geom_vline(data=mu, aes(xintercept=grp.mean, color=Percept),
+             linetype="dashed")+
+  scale_color_manual(values=c("#74A089", "#F8AFA8", "#999999"))+
+scale_fill_manual(values=c("#74A089", "#F8AFA8", "#999999"))+
+  scale_x_continuous(name = 'Count of occurence in all conditions', breaks = seq(0,max(freqdata$Freq),25))+
+  scale_y_continuous(name = 'density')+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+         legend.text = element_text(size=11),
+        legend.title = element_text(size=12))
+p1
+```
+
+
+#### (2) For BR conditions:
+```{r histogram_data_2, echo=FALSE}
+rivalind <- readMat('data/info/rivalind.mat')
+allind <- unlist(rivalind)
+data_rival <- bhv[as.logical(allind) ,] 
+  
+freq1<-data.frame('Percept' = 'Green', 'Freq' = data_rival$FREQ1) 
+freq2<-data.frame('Percept' = 'Red', 'Freq' = data_rival$FREQ2) 
+freq3<-data.frame('Percept' = 'Mixed', 'Freq' = data_rival$FREQ3)
+freqdata <- rbind(freq1, freq2, freq3)
+
+mu <- ddply(freqdata, "Percept", summarise, grp.mean=mean(Freq))
+
+p2 <- ggplot(freqdata, aes(x = Freq, color = Percept, fill = Percept)) + 
+  geom_histogram(aes(y=..density..), fill = 'white', alpha=0.3, position = "identity", bins = 30, size=0.4)+
+  geom_density(alpha=0.3)+
+  geom_vline(data=mu, aes(xintercept=grp.mean, color=Percept),
+             linetype="dashed")+
+  scale_color_manual(values=c("#0B775E", "#F2300F", "dimgray"))+
+scale_fill_manual(values=c("#0B775E", "#F2300F", "dimgray"))+
+  scale_x_continuous(name = 'Count of occurence in the rivalry condition', 
+                     breaks = round(seq(min(freqdata$Freq),max(freqdata$Freq),25), digits = 1),
+                     limits = c(min(freqdata$Freq) - sd(freqdata$Freq), max(freqdata$Freq) + sd(freqdata$Freq))
+                                                                                          )+
+  scale_y_continuous(name = 'density')+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+        legend.text = element_text(size=11),
+        legend.title = element_text(size=12))
+p2
+```
+
+Conclusion: The mixed percept happens about twice as freqence as single percept (Red or Green), and the Red and Green percept happens with a almost equal frequency, because the red or green percept regularly alters to the other type via the transition of a mixed percept. 
+
+### (3) Comapring between conditions:
+
+There are four conditions (Rival, Relay, Relay smooth, and Relay instantanous) randomly distributed across the 12-13 scans (one condition per scan) for each person. Are the conditions comparable?
+
+```{r comparing between scans}
+bhv_new <- bhv %>%  mutate(gr_rate = FREQ1/FREQ2)
+covar_test_mixed <- lmer(ALT_RATE ~ SCAN + gr_rate + (1|SUB), data=bhv_new)
+
+summary(covar_test_mixed)
+print(covar_test_mixed, correlation=TRUE)
+```
+
+
+```{r}
+# rival
+rivalind <- readMat('data/info/rival_bool.mat')
+data_rival <- bhv_new[as.logical(unlist(rivalind)) ,] 
+
+# relay_inst
+relay_instind <- readMat('data/info/replay_inst_bool.mat')
+data_relay_inst <- bhv_new[as.logical(unlist(relay_instind)) ,]
+# relay_smooth
+relay_smoothind <- readMat('data/info/replay_smooth_bool.mat')
+data_relay_smooth <- bhv_new[as.logical(unlist(relay_smoothind)) ,]
+
+data_rival$CONDITION = 'Rival'
+data_relay_inst$CONDITION = 'Relay Inst.'
+data_relay_smooth$CONDITION = 'Relay Smooth'
+
+print('(1) Rival condition:')
+summary(data_rival)
+print('(2) Relay inst. condition:')
+summary(data_relay_inst)
+print('(3) Relay smooth. condition:')
+summary(data_relay_smooth)
+
+scandata<-rbind(data_rival, data_relay_inst, data_relay_smooth)
+```
+
+```{r hist-alternation_rate_between_conditions}
+mu <- ddply(scandata, "CONDITION", summarise, grp.mean=mean(ALT_RATE))
+
+p3 <- ggplot(scandata, aes(x = ALT_RATE, color = CONDITION, fill = CONDITION)) + 
+  geom_histogram(aes(y=..density..), fill = 'white', alpha=0.3, position = "identity", bins=20, size=0.3)+
+  geom_density(alpha=0.25, adjust=1)+
+  geom_vline(data=mu, aes(xintercept=grp.mean, color=CONDITION),
+             linetype="dashed", size=0.8)+
+  scale_color_manual(values=c("#fdd262", "#f98400", "#046c9a"))+ # candidate color: #046c9a
+scale_fill_manual(values=c("#fdd262", "#f98400", "#046c9a"))+
+  scale_x_continuous(name = 'Average alternation rate (s) per scan', 
+                     breaks = round(seq(min(scandata$ALT_RATE),
+                                        max(scandata$ALT_RATE), 
+                                        length.out=6), digits = 1),
+                     limits = c(min(scandata$ALT_RATE)-sd(scandata$ALT_RATE),
+                                max(scandata$ALT_RATE)+sd(scandata$ALT_RATE)))+
+  scale_y_continuous(name = 'density')+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+        legend.text = element_text(size=11),
+        legend.title = element_text(size=12))
+p3
+```
+
+
+```{r comparing between conditions, parametric testing}
+
+covar_test2_mixed <- lmer(ALT_RATE ~ SCAN + CONDITION + gr_rate + (1|SUB), data=scandata)
+
+summary(covar_test2_mixed)
+print(covar_test2_mixed, correlation=TRUE)
+
+
+covar_test3_mixed <- lmer(ALT_RATE ~ (1|SCAN) + CONDITION + gr_rate + (1|SUB), data=scandata)
+
+summary(covar_test3_mixed)
+print(covar_test3_mixed, correlation=TRUE)
+```
+
+Conclusion: Between-scan variance is absorbed by the difference of the rival condition comparing to other conditions. The alternation rate is significantly quicker (t = -3.25, p = 0.0014) in the rival condition (mean = 1.6s) than the relay inst. condition (mean = 1.85s) or the relay smooth condition (mean = 1.82s). However, there is no difference in alternation rate between red and green percept. 
+
+
+##### (3.1) Percept alternation rate per scan during the Rivalry condition 
+
+```{r boxplot}
+#Calculation of mean and sd of each group ?
+my_mean=aggregate(data_rival$ALT_RATE , by=list(data_rival$SUB) , mean) ; colnames(my_mean)=c("Subjects" , "mean")
+my_sd=aggregate(data_rival$ALT_RATE , by=list(data_rival$SUB) , sd) ; colnames(my_sd)=c("Subjects" , "sd")
+my_info=merge(my_mean , my_sd , by.x=1 , by.y=1)
+
+p3.1.1<- ggplot(data_rival)+
+  geom_point(aes(x = SUB, y = ALT_RATE) , colour=rgb(0.8,0.7,0.1,0.4) , size=3.5) + 
+        geom_point(data = my_info, aes(x=Subjects, y = mean) , colour = rgb(0.6,0.5,0.4,0.6) , size = 5) +
+        geom_errorbar(data = my_info, aes(x = Subjects, y = sd, ymin = mean - sd, ymax = mean + sd), 
+                      colour = rgb(0.4,0.8,0.2,0.4) , width = 0.3 , size=0.8)+
+  geom_hline(yintercept = mean(data_rival$ALT_RATE), color="orange", linetype="dashed", alpha = 0.7)+
+  theme_classic()+
+  scale_x_discrete(name = 'Subjects')+
+  scale_y_continuous(name = 'Percept alternation rate per scan (s)')+
+  theme(
+        axis.title = element_text(size=13),
+        axis.text.x = element_text(size=10),
+        axis.text.y = element_text(size=12)
+        )
+p3.1.1
+```
+
+```{r boxplot2}
+#Calculation of mean and sd of each group ?
+my_mean=aggregate(data_rival$ALT_VAR , by=list(data_rival$SUB) , mean) ; colnames(my_mean)=c("Subjects" , "mean")
+my_sd=aggregate(data_rival$ALT_VAR , by=list(data_rival$SUB) , sd) ; colnames(my_sd)=c("Subjects" , "sd")
+my_info=merge(my_mean , my_sd , by.x=1 , by.y=1)
+
+p3.1.2<- ggplot(data_rival)+
+  geom_point(aes(x = SUB, y = ALT_VAR) , colour=rgb(0.8,0.4,0.2,0.4) , size=3.5) + 
+        geom_point(data = my_info, aes(x=Subjects, y = mean) , colour = rgb(0.4,0.1,0.09,0.5) , size = 5) + # candidate color: (0.6,0.2,0.08,0.6)
+        geom_errorbar(data = my_info, aes(x = Subjects, y = sd, ymin = mean - sd, ymax = mean + sd), 
+                      colour = rgb(0.4,0.8,0.2,0.4) , width = 0.3 , size=0.8)+
+  geom_hline(yintercept = mean(data_rival$ALT_VAR), color="orange", linetype="dashed", alpha = 0.7)+
+  theme_classic()+
+  scale_x_discrete(name = 'Subjects')+
+  scale_y_continuous(name = 'Standard deviation of \n percept alternation rate per scan (s)')+
+  theme(
+        axis.title = element_text(size=13),
+        axis.text.x = element_text(size=10),
+        axis.text.y = element_text(size=12)
+        )
+p3.1.2
+```
+
+##### (3.2) The relationship between the alternation rate and stableness of the alternation
+
+```{r regression, fig.width=8, fig.height=6}
+# expand color palette
+colourCount = length(data_rival$SUB)
+getPalette = colorRampPalette(brewer.pal(20, "Accent"))
+
+p3.2<-ggplot(data_rival, aes(x = ALT_RATE, y = ALT_VAR)) +
+  geom_point(aes(colour = SUB), size=5, alpha = 0.5) +
+  geom_smooth(method=lm , color="cadetblue4", size = 0.5,  se=TRUE, linetype="dashed", alpha = 0.5) +
+  scale_colour_manual(values = getPalette(colourCount)) +theme_classic()+
+  guides(colour=guide_legend(nrow=2))+
+  scale_x_continuous(name = 'Percept alternation rate per scan (s)')+
+  scale_y_continuous(name = 'Standard deviation of \n percept alternation rate per scan (s)')+ 
+  labs(colour = "Subjects")+
+  theme(legend.position="bottom",
+        axis.title = element_text(size=13),
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12),
+        legend.text = element_text(size = 8)
+        )
+  
+p3.2
+```
+
+#### (4) Comparing between the duration of the three types of percept during BR
+```{r}
+trial <- read_csv('data/info/table_trial.txt')%>% 
+  mutate(Percept = case_when(
+    ALT_PERCEPT == 1 ~ 'Green',
+    ALT_PERCEPT == 2 ~ 'Red',
+    ALT_PERCEPT == 3 ~ 'Mixed'
+  ))
+trial_rival <- trial %>% filter(CONDITION =='Rival') 
+
+print('Summary of the trial_by_trial percept duration.')
+summary(trial_rival)
+```
+
+```{r boxplot_for_rival_trials, fig.width=20, fig.height=6}
+p4.1<- ggplot(trial_rival, aes(x=SUBS, y=ALT_DELAY, fill=Percept)) +
+  geom_boxplot(alpha=0.6) +
+  #geom_hline(yintercept = 10, color="blue", linetype="dashed")+
+  scale_color_manual(values=c("#0B775E",  "#999999","#F2300F"))+
+scale_fill_manual(values=c("#0B775E", "#999999","#F2300F"))+
+  scale_x_discrete(name = 'Subjects')+
+  scale_y_continuous(name = 'Percept duration before altering (s)')+ 
+   theme_classic()+
+  theme(legend.position="right",
+        axis.title = element_text(size=13),
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12),
+        legend.text = element_text(size = 11),
+        legend.title = element_text(size = 12)
+        )
+p4.1
+```
+ 
+#### (5) Stats for individual difference of the BR
+
+```{r}
+ml <- lm(ALT_DELAY ~  Percept + SCANS+SUBS, trial_rival)
+ml0 <- lm(ALT_DELAY ~ Percept+SCANS, trial_rival)
+res_ml <- residuals(ml)
+hist(res_ml)
+anova(ml, ml0, 
+      test='Chisq')
+print(paste('AIC is reduced by', as.character(AIC(ml0) - AIC(ml))))
+
+```
+
+
+
+ 
+```{r percept_duration_distribution}
+mu <- ddply(trial_rival, "Percept", summarise, grp.mean=mean(ALT_DELAY))
+
+p4.2 <- ggplot(trial_rival, aes(x = ALT_DELAY,  color = Percept, fill = Percept)) + 
+  geom_histogram( aes(y=..density..),fill = 'white', alpha=0.3, position = "identity", bins = 150, size=0.4)+
+  geom_density(aes(y=..density..),alpha=0.3)+
+  geom_vline(data=mu, aes(xintercept=grp.mean, color=Percept),
+             linetype="dashed")+
+  scale_color_manual(values=c("#0B775E",  "#999999","#F2300F"))+
+scale_fill_manual(values=c("#0B775E",  "#999999","#F2300F"))+
+  scale_x_continuous(name = 'duration of percept in the rivalry condition (s)', 
+                     breaks = round(seq(min(trial_rival$ALT_DELAY),max(trial_rival$ALT_DELAY),length.out=5), digits = 1),
+                     limits = c(min(trial_rival$ALT_DELAY)-sd(trial_rival$ALT_DELAY), max(trial_rival$ALT_DELAY)+sd(trial_rival$ALT_DELAY)))+
+  scale_y_continuous(name = 'density')+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+        legend.text = element_text(size=11),
+        legend.title = element_text(size=12))
+p4.2
+```
+ 
+
+```{r interaction_plot, eval = FALSE, include = FALSE}
+# DO NOT REPORT
+trial %>% 
+  group_by(CONDITION, Percept) %>% 
+  summarise(trial_mean = mean(ALT_DELAY), trial_sd = sd(ALT_DELAY)) -> trial2
+
+
+  ggplot(data = trial2, aes(x = CONDITION, y = trial_mean, color = Percept)) +
+  geom_line(data = trial2, aes(group = Percept)) +
+  geom_point(size = 9, alpha = 0.6) + 
+  geom_point(data = trial, aes(x = CONDITION, y = ALT_DELAY , colour = Percept), size=2, alpha =0.08) + 
+       # candidate color: (0.6,0.2,0.08,0.6)
+        geom_errorbar(data = trial2, 
+                      aes(x = CONDITION, y = trial_sd, ymin = trial_mean - trial_sd, ymax = trial_mean + trial_sd, 
+                      colour = Percept), width = 0.2, size=0.4, alpha = 0.9)+
+  scale_color_manual(values=c("#74A089",  "#999999","#F8AFA8"))+ # candidatae colour: "#74A089", "#F8AFA8","#0B775E","#F2300F"
+scale_fill_manual(values=c("#74A089",  "#999999","#F8AFA8"))+
+  scale_x_discrete(name = 'Conditions')+
+  scale_y_continuous(name = 'Percept endurance', 
+                     breaks = round(seq(min(trial$ALT_DELAY) , max(trial$ALT_DELAY) , length.out=5), digits = 1),
+                     limits = c(min(trial$ALT_DELAY) - sd(trial$ALT_DELAY), max(trial$ALT_DELAY) + sd(trial$ALT_DELAY)))+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+         legend.text = element_text(size=11),
+        legend.title = element_text(size=12))
+```
+
+```{r interaction_plot2}
+my_comparison <- list(c("Relay Inst.", "Relay Smooth"), c("Rival, Relay Inst."), c("Rival", "Relay Smooth"))
+compare_means(ALT_DELAY ~ CONDITION,  data = trial)
+
+p4.3<-ggplot(data = trial, aes(x = CONDITION, y = ALT_DELAY, color = Percept)) +
+  geom_boxplot(alpha=0.5, size = 0.3, width=0.3, outlier.size = 0.5, outlier.alpha = 0.1) +
+  stat_summary(fun.y=mean, geom = "line", aes(group=Percept), size = 0.5, alpha = 1, linetype='dashed')+
+  stat_summary(fun.y=mean, geom='point', size=10, alpha= 0.4, pch = c(17,16, 18,17,16, 18,17,16, 18), show.legend = T) +
+  scale_color_manual(values=c("#0B775E",  "#999999","#F2300F"))+ # candidatae colour: "#74A089", "#F8AFA8","#0B775E","#F2300F"
+  scale_x_discrete(name = 'Conditions')+
+  scale_y_continuous(name = 'Percept endurance', 
+                     breaks = round(seq(min(trial$ALT_DELAY) , max(trial$ALT_DELAY) , length.out=5), digits = 1),
+                     limits = c(min(trial$ALT_DELAY) - sd(trial$ALT_DELAY), max(trial$ALT_DELAY)))+
+  theme_classic()+
+  theme(legend.position="right",
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12),
+         legend.text = element_text(size=11),
+        legend.title = element_text(size=12))+ 
+  guides(colour = guide_legend(override.aes = list(shape = c(17,16, 18))))
+  #stat_compare_means(aes(group = CONDITION), label = "p.signif") 
+  #stat_compare_means(aes(group = CONDITION),paired=T, comparisons = my_comparison, label = "p.signif")
+
+p4.3
+```
+
+
+
+#### (6) Comparing between the duration of the BR mixed vs RPL Smooth mixed
+
+```{r}
+trial_mixed <- trial %>% filter(CONDITION %in% c('Rival','Relay Smooth')) %>% filter(Percept=='Mixed')
+mod1 <- lmer(ALT_DELAY ~ CONDITION|SUBS, trial_mixed)
+mod0 <- lmer(ALT_DELAY ~ 1|SUBS, trial_mixed)
+anova(mod1, mod0)
+```
+
+
+### 2. Head movement inspection
+
+Set standards of outliers: 
+
+(1) data-driven threshold to find out outlier scans: 
+
+(the group mean of individual's average displacement + 3*SD) --> 0.998 mm
+ (the group mean of individual's maximal time-variant displacement + 1*SD --> 0.82 mm
+
+
+i.e. if the scan (with time-series volumes) has an average displacement of head position bigger than 0.998 mm **OR** the maximum of time-variant displacement bigger than 0.82 mm, then it will be taken as an outlier scan and will be dealt with.
+
+(2) hard threshold from previous literature to find out outlier volumes for those outlier scans: 
+0.25 (+2S.D. for all displacements across all subjects) --> 0.2570 mm
+
+```{r load file}
+HMT <- data.frame()
+HMT_diff <- data.frame()
+sublist = list.files(path='/media/dian/D/R/project/BR/data/rivalry_fMRI_head_motion_files', pattern='S')
+for(sub in sublist){
+scanlist = list.files(path = paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/'), pattern = 'scan')
+for (scan in scanlist){
+  scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/', scan)
+file = list.files(path=scanfolder, full.names = TRUE, pattern='rp')
+ fd <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric) 
+hmt <- mutate_each(fd, abs) 
+hmt_diff<- data.frame(diff(as.matrix(fd)))
+
+sub_scan_col <- data.frame('subject' = rep(sub, 6), 'scan' = rep(scan,6))
+hmt_desc <- cbind(sub_scan_col,describe(hmt))
+hmt_diff_desc <- cbind(sub_scan_col,describe(hmt_diff))
+
+HMT<- rbind(HMT, hmt_desc)
+HMT_diff<- rbind(HMT_diff, hmt_diff_desc)
+}}
+
+HMT$vars <- as.factor(HMT$vars)
+HMT_diff$vars <- as.factor(HMT_diff$vars)
+```
+
+```{r table saved, eval = FALSE, include = FALSE}
+#write_csv(HMT, 'data/tables/headmovement_summary.csv')
+#write_csv(HMT_diff, 'data/tables/headmovement_timevariant_summary.csv')
+```
+
+
+```{r first-level screening based on individual average value}
+metaHMT_diff <- describe(HMT_diff)
+hard_threshold <- 0.25 + 2*metaHMT_diff$sd[5] # 0.2570 mm
+
+HMT_diff_threshold = metaHMT_diff$mean[11]+metaHMT_diff$sd[11]  # 0.82 mm
+outliers1 <- HMT_diff %>% filter(max>HMT_diff_threshold | mean > hard_threshold) # max
+#outliers1
+
+metaHMT <- describe(HMT)
+HMT_threshold = metaHMT$mean[5]+3*metaHMT$sd[5] #0.998 mm
+outliers2 <- HMT %>% filter(mean> HMT_threshold)
+#outliers2
+
+# based on the paper, the threshold is 0.25 (+2S.D. for all displacements across all subjects) for spike identification--> a threshold based on a relative RMS displacement, so we add that too.  
+# outlier threshold, when the average movement displacement is bigger than 0.998 mm or the biggest time variant of displacement is bigger than 0.82 mm or the mean time-variant of displacement is bigger than the hard threshold of 0.257 mm.
+
+outliers <- unique(rbind(outliers1[,1:2], outliers2[,1:2]))
+```
+
+What are the outliers scans?
+
+```{r show_outliers}
+outliers
+```
+
+An example of an extreme case of outlier: S07-scan 9
+
+```{r an_example_of_an_extreme_case}
+# sub 7 scan 9
+scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', 'S07', '/MRI/fMRI_preproc_rpfiles/', 'scan9')
+file = list.files(path=scanfolder, full.names = TRUE, pattern = 'rp')
+hmt <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric)
+col1<- data.frame(dimension ='dim1', 'movement' = hmt$X1)
+col2<- data.frame(dimension ='dim2', 'movement' = hmt$X2)
+col3<- data.frame(dimension ='dim3', 'movement' = hmt$X3)
+col4<- data.frame(dimension ='dim4', 'movement' = hmt$X4)
+col5<- data.frame(dimension ='dim5', 'movement' = hmt$X5)
+col6<- data.frame(dimension ='dim6', 'movement' = hmt$X6)
+timepoint<- 1:dim(col1)[1]
+outlier_f <- rbind(col1, col2, col3, col4, col5, col6)
+outlier_f$timepoint = timepoint
+
+ggplot(data=outlier_f, aes(x = timepoint,
+                           y = movement, 
+                           group = dimension)) +
+  geom_line(alpha = 0.7) +
+  geom_point(size=0.35, alpha = 0.7) + 
+theme_classic()+
+  theme(
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12))+ 
+  coord_cartesian(xlim = c(0, 130), ylim = c(-3, 6))
+```
+
+
+```{r USING_MORE_HARSH_THRESHOLD_pure_hard_threshold, include = FALSE, eval=FALSE}
+#We need to find out the problematic scans for individual timeseries. 
+# using hard_threshold to screen the scans
+OUTLIER_scans <- data.frame()
+
+sublist = list.files(path='/media/dian/D/R/project/BR/data/rivalry_fMRI_head_motion_files', pattern='S')
+for(sub in sublist){
+scanlist = list.files(path = paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/'), pattern = 'scan')
+for (scan in scanlist){
+  scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/', scan)
+file = list.files(path=scanfolder, full.names = TRUE, pattern='rp')
+ fd <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric) 
+hmt <- mutate_each(fd, abs) 
+hmt_diff<- data.frame(diff(as.matrix(fd)))
+
+problematic_scans <- unique(c(which(hmt_diff[,1] > hard_threshold), which(hmt_diff[,2] > hard_threshold),
+                              which(hmt_diff[,3] > hard_threshold), which(hmt_diff[,4] > hard_threshold),
+                              which(hmt_diff[,5] > hard_threshold), which(hmt_diff[,6] > hard_threshold) ))
+outlier_scans <- NULL
+if(!is_empty(problematic_scans)){
+outlier_scans <- data.frame('Subject' = sub, 'Run' = scan, 'Scan with spikes'= problematic_scans + 1)
+OUTLIER_scans<- rbind(OUTLIER_scans, outlier_scans)
+}}}
+
+
+```
+
+```{r, include = FALSE, eval=FALSE}
+print('Statistical summary & desciption of the outlier runs...')
+summary(OUTLIER_scans)
+describe(OUTLIER_scans)
+
+for (sub in unique(OUTLIER_scans$Subject)){
+  subout<- filter(OUTLIER_scans, Subject == sub)
+  for(run in unique(subout$Run)){
+    runout <- filter(subout, Run==run)
+    print(paste('For', sub, run, ', there are', as.character(dim(runout)[1]), 'volumes not usable..'))
+  }
+}
+```
+
+
+```{r another softer version of screening}
+# data-driven screening  + hard threshold
+
+# using hard_threshold to screen the scans
+OUTLIER_scans2 <- data.frame()
+
+sublist = unique(as.character(outliers$subject))
+for(sub in sublist){
+scanlist = as.character(filter(outliers, subject == sub)$scan)
+for (scan in scanlist){
+  scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/', scan)
+file = list.files(path=scanfolder, full.names = TRUE, pattern='rp')
+ fd <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric) 
+ 
+hmt_diff<- data.frame(diff(as.matrix(fd))) %>% mutate_each(abs)
+
+problematic_scans <- unique(c(which(hmt_diff[,1] > hard_threshold), which(hmt_diff[,2] > hard_threshold),
+                              which(hmt_diff[,3] > hard_threshold), which(hmt_diff[,4] > hard_threshold),
+                              which(hmt_diff[,5] > hard_threshold), which(hmt_diff[,6] > hard_threshold) ))
+outlier_scans2 <- NULL
+if(!is_empty(problematic_scans)){
+outlier_scans2 <- data.frame('Subject' = sub, 'Run' = scan, 'Scan with spikes'= problematic_scans + 1)
+OUTLIER_scans2<- rbind(OUTLIER_scans2, outlier_scans2)
+}}}
+
+#write_csv(OUTLIER_scans2, path = 'data/rivalry_fMRI_head_motion_files/OUTLIER_scans2.txt')
+```
+
+Summary & descriptions of the problematic volumes for those outliers scans
+
+```{r summary_outlier}
+summary(OUTLIER_scans2)
+describe(OUTLIER_scans2)
+```
+
+What are the volumes that should be dealt with for those outliers scans?
+
+```{r}
+for (sub in unique(OUTLIER_scans2$Subject)){
+  subout<- filter(OUTLIER_scans2, Subject == sub)
+  for(run in unique(subout$Run)){
+    runout <- filter(subout, Run==run)
+    print(paste('For', sub, run, ',', as.character(dim(runout)[1]), 'unsable volumes:', paste(unlist(as.character(runout$Scan.with.spikes)), collapse=",")))
+  }
+}
+```
+
+
+```{r create_non-outlier_mask, eval=FALSE, include =FALSE}
+# using hard_threshold to screen the scans
+OUTLIER_scans <- data.frame()
+
+sublist = list.files(path='/media/dian/D/R/project/BR/data/rivalry_fMRI_head_motion_files', pattern='S')
+for(sub in sublist){
+scanlist = list.files(path = paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/'), pattern = 'scan')
+for (scan in scanlist){ # caution! inconsistent naming, this "scan" means run
+  scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/', scan)
+file = list.files(path=scanfolder, full.names = TRUE, pattern ='rp')
+ fd <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric) 
+ 
+ outscans <- OUTLIER_scans2 %>% filter(Subject == sub & Run == scan)
+ outscans <- outscans$Scan.with.spikes
+ 
+ mask <- rep(1, dim(fd)[1])
+ mask[outscans] <- 0 
+ #writeMat(paste0('data/rivalry_fMRI_head_motion_files/', sub, '/MRI/fMRI_preproc_rpfiles/', scan, '/', sub, '_', scan, '_outlier_mask.mat'), mask=mask)
+ #if(!is_empty(outscans)){
+ #print(sub)
+ #print(scan)
+ #print(mask)
+}}#}
+
+```
+
+```{r an_effect_of_removing_the_scans_with_spikes}
+# sub 7 scan 9
+scanfolder=paste0('data/rivalry_fMRI_head_motion_files/', 'S07', '/MRI/fMRI_preproc_rpfiles/', 'scan9')
+mask <-readMat(list.files(path=scanfolder, full.names = TRUE, pattern='mask'))
+mask <- mask[[1]]
+file = list.files(path=scanfolder, full.names = TRUE, pattern='rp')
+hmt <- read_delim(file, col_names=FALSE, delim = ' ') %>% mutate_each(as.numeric)
+mask <- as.logical(mask)
+
+hmt_diff<- diff(as.matrix(hmt))
+hmt_diff<- hmt_diff[mask[2:length(mask)],]
+hmt_diff<- data.frame(rbind(c(0,0,0,0,0,0), hmt_diff))
+hmt_new <- hmt_diff %>% mutate_each(cumsum)
+
+col1<- data.frame(dimension ='dim1', 'movement' = hmt_new$X1)
+col2<- data.frame(dimension ='dim2', 'movement' = hmt_new$X2)
+col3<- data.frame(dimension ='dim3', 'movement' = hmt_new$X3)
+col4<- data.frame(dimension ='dim4', 'movement' = hmt_new$X4)
+col5<- data.frame(dimension ='dim5', 'movement' = hmt_new$X5)
+col6<- data.frame(dimension ='dim6', 'movement' = hmt_new$X6)
+
+timepoint<- 1:dim(col1)[1]
+outlier_f <- rbind(col1, col2, col3, col4, col5, col6)
+outlier_f$timepoint = timepoint
+
+ggplot(data=outlier_f, aes(x = timepoint,
+                           y = movement, 
+                           group = dimension)) +
+  geom_line(alpha = 0.7) +
+  geom_point(size=0.35, alpha = 0.7) + 
+theme_classic()+
+  theme(
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=12))+ 
+  coord_cartesian(xlim = c(0, 130), ylim = c(-3, 6))
+
+```
+
