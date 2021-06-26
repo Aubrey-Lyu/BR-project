@@ -23,6 +23,7 @@ To replicate the results of the project, apart from carrying out the pipeline ri
 ## Variable naming explained: 
 
 1\. HMM_results
+
 \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-
 1.1 \*Condition\*_results2.mat 
 \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-
@@ -38,6 +39,7 @@ In the \*Condition\*\_results2.mat file, there are the following variables: FO, 
 \- to recover the state lifecourse across time, you need to use the state onsets, lifetimes/intervals. I have only estimated them for the state 4 during the BR\_dominant condition. (variables: "BR\_dominant\_k4\_onsets/lifetimes/intervals")
 
 \- about behaviour covariates:
+
 \- mean\_Y has 10 columns, but you only need the first two columns: Lat\_before and Lat_after, corresponding to perception duration (latency) before and after the motor response.
 
 \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-
