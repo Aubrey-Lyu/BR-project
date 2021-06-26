@@ -1,7 +1,7 @@
 # BR-project
 # Data analyses for the project: "Perturbation or Function? Intrinsic brain dynamics in the Default Mode Network predict involuntary fluctuations of visual awareness"
 
-## Data repository: dx.doi.org/10.5061/dryad.bf1b1\
+## Data repository: https://datadryad.org/stash/dataset/doi:10.5061/dryad.bf1b1
 
 The original neuroimaging data accessible to the public have already been preprocessed based on standard preprocessing pipelines: https://www.sciencedirect.com/science/article/pii/S1053811917301520?via%3Dihub
 
