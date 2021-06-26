@@ -1,5 +1,5 @@
 # BR-project
-# Data analysis for the project: "Perturbation or Function? Intrinsic brain dynamics in the Default Mode Network predict involuntary fluctuations of visual awareness"
+# Data analyses for the project: "Perturbation or Function? Intrinsic brain dynamics in the Default Mode Network predict involuntary fluctuations of visual awareness"
 
 ## Data repository: dx.doi.org/10.5061/dryad.bf1b1\
 
