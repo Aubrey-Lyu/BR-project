@@ -13,12 +13,17 @@ The head movement files necessary for the following fMRI data analyses were loca
 
 To replicate the results of the project, apart from carrying out the pipeline right from the beginning with the original data; the reader/reviewer can also partially test some of the results in the midway. The intermediate results that may be used as the input data for next steps have been stored in the path: https://github.com/Aubrey-Lyu/BR-project/tree/master/data/intermediate, as well as in the "Results" folder in each Analysis module, e.g. https://github.com/Aubrey-Lyu/BR-project/tree/master/Analysis-2_fMRI/results
 
-## Required toolboxes:
+## Essential toolboxes:
 
 1.  MNE: https://mne.tools/dev/install/index.html
 2.  HMM-MAR-master: https://github.com/OHBA-analysis/HMM-MAR/
 3.  granger\_cause\_1: https://uk.mathworks.com/matlabcentral/fileexchange/59390-granger\_cause\_1
 4.  spm12: https://www.fil.ion.ucl.ac.uk/spm/software/spm12/
+
+## Required dependencies and compatible software versions:
+1.  Matlab2016a
+2.  Python3
+3.  Nilearn>=0.5.1
 
 ## Variable naming explained: 
 
