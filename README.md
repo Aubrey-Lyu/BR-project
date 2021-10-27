@@ -16,7 +16,7 @@ To replicate the results of the project, apart from carrying out the pipeline ri
 
 ## Essential toolboxes:
 
-1.  MNE: https://mne.tools/dev/install/index.html
+1.  MNE (Version 0.23.4): https://mne.tools/dev/install/index.html
 2.  HMM-MAR-master: https://github.com/OHBA-analysis/HMM-MAR/
 3.  granger\_cause\_1: https://uk.mathworks.com/matlabcentral/fileexchange/59390-granger\_cause\_1
 4.  spm12: https://www.fil.ion.ucl.ac.uk/spm/software/spm12/
