@@ -23,7 +23,7 @@ To replicate the results of the project, apart from carrying out the pipeline ri
 
 ## Required dependencies and compatible software versions:
 1.  Matlab2016a
-2.  Python3
+2.  Python=2.7
 3.  Nilearn>=0.5.1
 
 ## Variable naming explained: 
